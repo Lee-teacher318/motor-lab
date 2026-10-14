@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>전동기 원리 탐구실</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: tablet bench — landscape: motor stage left, touch control column right; portrait: stage on top, controls below in two columns */
+:root{
+  --bg:#edf2f1; --surface:#ffffff; --surface2:#f5f8f7; --ink:#1c2a2c; --muted:#5a6c6e; --line:#d2dedc;
+  --teal:#23a490; --north:#d4472f; --south:#3463ad; --copper:#c79a3a; --coil-mid:#dde1e3;
+  --current:#e0261c; --warn:#c86b12;
+  --f-display:"Black Han Sans","Noto Sans KR",system-ui,sans-serif;
+  --f-body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111a1c; --surface:#1a2528; --surface2:#202d30; --ink:#e4eceb; --muted:#93a5a6; --line:#2e3d40;
+  --teal:#4cccb7; --north:#e8604a; --south:#5b8fe2; --copper:#d9b25a; --coil-mid:#4a5458;
+  --current:#ff5a4c; --warn:#e8954a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111a1c; --surface:#1a2528; --surface2:#202d30; --ink:#e4eceb; --muted:#93a5a6; --line:#2e3d40;
+  --teal:#4cccb7; --north:#e8604a; --south:#5b8fe2; --copper:#d9b25a; --coil-mid:#4a5458;
+  --current:#ff5a4c; --warn:#e8954a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.wrap{max-width:1400px;margin:0 auto;padding-inline:16px;padding-block:14px 16px;display:flex;flex-direction:column;gap:12px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 20px}
+h1{font-family:var(--f-display);font-weight:400;font-size:clamp(24px,3.2vw,32px);line-height:1.1;margin:0;letter-spacing:.01em}
+h1 .n{color:var(--north)} h1 .s{color:var(--south)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+.bench{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.stage{padding:10px;display:flex;justify-content:center}
+.canvas-box{position:relative;width:100%;max-width:100%}
+#motor{width:100%;aspect-ratio:640/420;display:block;touch-action:none;cursor:grab;max-width:100%}
+#motor.drag{cursor:grabbing}
+.hint{position:absolute;right:6px;bottom:2px;font-size:13px;color:var(--muted);pointer-events:none}
+
+.panel{padding:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-content:start}
+.group{display:grid;gap:6px;min-width:0}
+.group.full{grid-column:1/-1}
+.glabel{font-size:13px;color:var(--muted);font-weight:500}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{font:inherit;font-weight:700;font-size:16px;min-height:52px;border-radius:12px;padding:8px 12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);cursor:pointer;width:100%;transition:transform .08s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.power{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn.power.off{background:var(--surface2);color:var(--muted);border-color:var(--line)}
+.btn.big{min-height:64px;font-size:18px}
+.btn.cur{background:var(--current);border-color:var(--current);color:#fff}
+.btn.mag{background:linear-gradient(90deg,var(--north) 0 50%,var(--south) 50% 100%);border:0;color:#fff}
+.btn:focus-visible,.seg button:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg button{font:inherit;font-size:15px;min-height:48px;border:0;background:var(--surface2);color:var(--ink);padding:4px 6px;cursor:pointer;border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);font-weight:700}
+.seg.scenes button{font-family:var(--f-num);font-size:18px}
+.seg.scenes button.on{background:var(--teal);color:#fff}
+.turns{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:12px;background:var(--surface2);font-size:15px;color:var(--muted)}
+.turns b{color:var(--ink);font-family:var(--f-num);font-weight:500;font-size:24px}
+
+/* landscape tablet: stage + control column, everything within one screen */
+@media (orientation:landscape) and (min-width:820px){
+  .bench{grid-template-columns:minmax(0,1fr) clamp(250px,24vw,310px)}
+  .canvas-box{width:min(100%, calc((100vh - 110px) * 640 / 420));width:min(100%, calc((100dvh - 110px) * 640 / 420))}
+  .panel{grid-template-columns:minmax(0,1fr);gap:10px}
+  .group.full{grid-column:auto}
+}
+@media (orientation:landscape) and (min-width:820px) and (max-height:700px){
+  .btn{min-height:46px} .btn.big{min-height:52px;font-size:17px} .seg button{min-height:42px}
+  .panel{gap:8px;padding:12px}
+}
+@media (max-width:520px){ .panel{grid-template-columns:minmax(0,1fr)} }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>전동기 원리 탐구실 <span class="n">N</span><span class="s">S</span></h1>
+    <div class="legend" aria-label="그림 기호">
+      <span><i class="sw" style="background:var(--north)"></i>N극</span>
+      <span><i class="sw" style="background:var(--south)"></i>S극</span>
+      <span><i class="sw" style="background:var(--current)"></i>전류의 방향</span>
+      <span><i class="sw" style="background:var(--teal)"></i>코일을 돌리는 힘</span>
+      <span>★ 코일의 같은 끝</span>
+    </div>
+  </header>
+
+  <div class="bench">
+    <div class="card stage">
+      <div class="canvas-box">
+        <canvas id="motor" aria-label="자석 사이에 놓인 코일 시뮬레이션"></canvas>
+        <div class="hint">코일을 손가락으로 끌어서 돌려 볼 수 있어요</div>
+      </div>
+    </div>
+
+    <div class="card panel">
+      <div class="group full">
+        <div class="pair">
+          <button class="btn primary" id="play">일시정지</button>
+          <button class="btn power off" id="power">전원 꺼짐</button>
+        </div>
+      </div>
+      <div class="group">
+        <button class="btn big cur" id="flipI">전류의 방향 바꾸기</button>
+      </div>
+      <div class="group">
+        <button class="btn big mag" id="flipB">자석 N·S 바꾸기</button>
+      </div>
+      <div class="group">
+        <span class="glabel">전류의 세기</span>
+        <div class="seg" id="bat">
+          <button data-v="1" aria-pressed="false">약하게</button>
+          <button data-v="2" aria-pressed="true">보통</button>
+          <button data-v="3" aria-pressed="false">세게</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="glabel">재생 속도</span>
+        <div class="seg" id="spd">
+          <button data-v="0.15" aria-pressed="false">아주 느리게</button>
+          <button data-v="0.4" aria-pressed="true">느리게</button>
+          <button data-v="1" aria-pressed="false">보통</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="turns">시계 방향으로 돈 바퀴 수 <b id="turns">0</b></div>
+      </div>
+      <div class="group full">
+        <button class="btn" id="reset">처음 상태로</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{
+const DEG=Math.PI/180, K=0.82, BMAG=2, J=0.05, BF=0.5, JIGGLE=0.04;
+const PH=[130,40,310,220].map(d=>d*DEG);
+const st={theta:PH[0],omega:0,power:false,bat:2,idir:1,bdir:1,speed:0.4,paused:false,drag:false,turn:0};
+
+const $=id=>document.getElementById(id);
+const mc=$('motor');
+const dpr=Math.min(window.devicePixelRatio||1,3);
+mc.width=640*dpr;mc.height=420*dpr;
+const x=mc.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);
+
+let C={};
+function readColors(){const s=getComputedStyle(document.documentElement);['surface','muted','teal','north','south','copper','coil-mid','current','warn'].forEach(k=>C[k]=s.getPropertyValue('--'+k).trim());C.font=getComputedStyle(document.body).fontFamily;}
+readColors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',readColors);
+new MutationObserver(readColors).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','class','style']});
+document.fonts&&document.fonts.ready.then(readColors);
+
+// ---------- physics (no commutator) ----------
+const norm=a=>{a%=2*Math.PI;return a<0?a+2*Math.PI:a;};
+const current=()=>st.power?st.bat:0;
+const torque=()=>-st.idir*current()*Math.sin(st.theta)*st.bdir*BMAG*K;
+const starIsN=()=>st.idir>0;
+function step(dt){
+  const n=Math.max(1,Math.ceil(dt/0.003)),h=dt/n;
+  for(let i=0;i<n;i++){
+    st.omega+=(torque()-BF*st.omega)/J*h;
+    // tiny random jiggle (vibration) while current flows: invisible normally, but tips the coil off the dead point
+    if(st.power)st.omega+=(Math.random()-0.5)*3.46*Math.sqrt(JIGGLE*h);
+    const d=st.omega*h;st.theta=norm(st.theta+d);st.turn-=d;
+  }
+}
+
+// ---------- drawing ----------
+function arrow(a,b,c,d,w,col){const ang=Math.atan2(d-b,c-a),hl=w*2.6;x.strokeStyle=col;x.fillStyle=col;x.lineWidth=w;x.lineCap='round';
+  x.beginPath();x.moveTo(a,b);x.lineTo(c-Math.cos(ang)*hl*0.8,d-Math.sin(ang)*hl*0.8);x.stroke();
+  x.beginPath();x.moveTo(c,d);x.lineTo(c-hl*Math.cos(ang-0.45),d-hl*Math.sin(ang-0.45));x.lineTo(c-hl*Math.cos(ang+0.45),d-hl*Math.sin(ang+0.45));x.closePath();x.fill();}
+function pill(txt,px,py,col,fs=13){x.font=`700 ${fs}px ${C.font}`;const w=x.measureText(txt).width+14;
+  x.fillStyle=C.surface;x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();x.roundRect(px-w/2,py-11,w,22,11);x.fill();x.stroke();
+  x.fillStyle=col;x.textAlign='center';x.textBaseline='middle';x.fillText(txt,px,py+1);}
+
+const CX=320,CY=210,R=139,HW=60,A=Math.asin(HW/R),XE=R*Math.cos(A);
+const leftPole=()=>st.bdir>0?'N':'S', rightPole=()=>st.bdir>0?'S':'N';
+
+function draw(){
+  x.clearRect(0,0,640,420);
+  x.save();x.globalAlpha=.55;x.setLineDash([5,7]);
+  for(const yy of [-80,-40,0,40,80]){const xi=Math.sqrt(150*150-yy*yy);x.strokeStyle=C.muted;x.lineWidth=1;x.beginPath();x.moveTo(CX-xi,CY+yy);x.lineTo(CX+xi,CY+yy);x.stroke();}
+  x.setLineDash([]);
+  for(const yy of [-80,80]){arrow(CX-st.bdir*6,CY+yy,CX+st.bdir*10,CY+yy,1.5,C.muted);}
+  x.restore();
+  const mag=(side,pole)=>{
+    x.beginPath();
+    if(side<0){x.moveTo(CX-225,CY-100);x.lineTo(CX-112,CY-100);x.arc(CX,CY,150,Math.atan2(-100,-112),Math.atan2(100,-112),true);x.lineTo(CX-225,CY+100);}
+    else{x.moveTo(CX+225,CY-100);x.lineTo(CX+112,CY-100);x.arc(CX,CY,150,Math.atan2(-100,112),Math.atan2(100,112),false);x.lineTo(CX+225,CY+100);}
+    x.closePath();x.fillStyle=pole==='N'?C.north:C.south;x.fill();x.lineWidth=2;x.strokeStyle='rgba(0,0,0,.25)';x.stroke();
+    x.fillStyle='#fff';x.font=`700 30px ${C.font}`;x.textAlign='center';x.textBaseline='middle';x.fillText(pole,CX+side*196,CY+2);
+  };
+  mag(-1,leftPole());mag(1,rightPole());
+
+  const tau=torque(),tmax=K*3*BMAG,m01=Math.min(1,Math.abs(tau)/(tmax*0.55));
+  if(m01>0.04){
+    const cw=tau<0;x.save();x.globalAlpha=0.25+0.75*m01;x.strokeStyle=C.teal;x.fillStyle=C.teal;x.lineWidth=7;x.lineCap='round';
+    for(const base of [-Math.PI/2,Math.PI/2]){
+      const a0=base-0.38,a1=base+0.38,R2=183;
+      x.beginPath();x.arc(CX,CY,R2,cw?a0:a0+0.08,cw?a1-0.08:a1);x.stroke();
+      const tip=cw?a1:a0,tg=tip+(cw?1:-1)*Math.PI/2,tx=CX+R2*Math.cos(tip),ty=CY+R2*Math.sin(tip),hl=17;
+      x.beginPath();x.moveTo(tx+Math.cos(tg)*6,ty+Math.sin(tg)*6);
+      x.lineTo(tx-hl*Math.cos(tg)+9*Math.cos(tip),ty-hl*Math.sin(tg)+9*Math.sin(tip));
+      x.lineTo(tx-hl*Math.cos(tg)-9*Math.cos(tip),ty-hl*Math.sin(tg)-9*Math.sin(tip));x.closePath();x.fill();
+    }
+    x.restore();
+  }
+
+  const on=st.power,sN=starIsN();
+  const starCol=on?(sN?C.north:C.south):C['coil-mid'],otherCol=on?(sN?C.south:C.north):C['coil-mid'];
+  x.save();x.translate(CX,CY);x.rotate(-st.theta);
+  x.beginPath();x.moveTo(-XE,-HW);x.lineTo(XE,-HW);x.arc(0,0,R,-A,A,false);x.lineTo(-XE,HW);x.arc(0,0,R,Math.PI-A,Math.PI+A,false);x.closePath();
+  const g=x.createLinearGradient(-R,0,R,0);g.addColorStop(0,otherCol);g.addColorStop(0.42,C['coil-mid']);g.addColorStop(0.58,C['coil-mid']);g.addColorStop(1,starCol);
+  x.fillStyle=g;x.fill();x.lineWidth=2;x.strokeStyle=C.muted;x.stroke();
+  const cdir=sN?1:-1;
+  for(const xi of [-90,-54,-18,18,54,90]){
+    const p0=[xi-12,-66],p1=[xi+12,66];
+    x.strokeStyle=C.copper;x.lineWidth=4;x.lineCap='round';x.beginPath();x.moveTo(...p0);x.lineTo(...p1);x.stroke();
+    x.lineWidth=2.5;for(const [px,py] of [p0,p1]){x.beginPath();x.arc(px,py,5,0,7);x.fillStyle=C.surface;x.fill();x.stroke();}
+    if(on){
+      const a=cdir>0?p0:p1,b=cdir>0?p1:p0,lerp=t=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+      const s=lerp(0.24),e=lerp(0.76);arrow(s[0],s[1],e[0],e[1],3.5,C.current);
+    }
+  }
+  x.beginPath();x.arc(0,0,6,0,7);x.fillStyle=C.muted;x.fill();
+  x.restore();
+
+  const ct=Math.cos(st.theta),sn=Math.sin(st.theta);
+  const wp=(lx,ly)=>[CX+lx*ct+ly*sn,CY-lx*sn+ly*ct];
+  x.textAlign='center';x.textBaseline='middle';
+  if(on){
+    x.font=`700 24px ${C.font}`;x.lineWidth=4;x.strokeStyle='rgba(0,0,0,.35)';x.fillStyle='#fff';
+    let [a,b]=wp(110,0);x.strokeText(sN?'N':'S',a,b);x.fillText(sN?'N':'S',a,b);
+    [a,b]=wp(-110,0);x.strokeText(sN?'S':'N',a,b);x.fillText(sN?'S':'N',a,b);
+    [a,b]=wp(0,-30);pill('전류',a,b,C.current,12);
+  }
+  {const [a,b]=wp(112,-42);x.font=`20px ${C.font}`;x.fillStyle='#f6c945';x.strokeStyle='rgba(0,0,0,.4)';x.lineWidth=3;x.strokeText('★',a,b);x.fillText('★',a,b);}
+
+  if(on){
+    for(const side of [1,-1]){
+      const [tx,ty]=wp(side*125,0);
+      const pole=(side===1)===sN?'N':'S',left=tx<CX,mp=left?leftPole():rightPole();
+      const repel=pole===mp,toward=left?-1:1,dir=repel?-toward:toward,str=Math.abs(tx-CX)/125;
+      if(str<0.3)continue;
+      const len=12+24*str,col=repel?C.warn:C.teal,ox=tx+dir*4,oy=ty+(ty<CY?-8:8);
+      arrow(ox,oy,ox+dir*len,oy,4,col);
+      pill(repel?'미는 힘':'당기는 힘',ox+dir*len/2,oy+(ty<CY?-22:22),col);
+    }
+  }
+}
+
+// ---------- scene buttons ----------
+const scenes=[...document.querySelectorAll('#scenes button')];
+function sceneIdx(){
+  if(!st.power||st.bdir!==1)return -1;
+  const d=st.theta/DEG,sN=starIsN();
+  if(sN&&d>90&&d<=180)return 0;
+  if(sN&&d>0&&d<=90)return 1;
+  if(!sN&&d>270)return 2;
+  if(!sN&&d>180&&d<=270)return 3;
+  return -1;
+}
+let lastScene=-2,lastTurns=-1;
+function ui(){
+  const n=Math.max(0,Math.floor(st.turn/(2*Math.PI)));if(n!==lastTurns){$('turns').textContent=n;lastTurns=n;}
+}
+
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(!st.paused&&!st.drag)step(dt*st.speed);
+  draw();ui();requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- controls ----------
+function syncUI(){
+  $('play').textContent=st.paused?'재생':'일시정지';
+  const p=$('power');p.textContent=st.power?'전원 켜짐':'전원 꺼짐';p.classList.toggle('off',!st.power);
+  document.querySelectorAll('#bat button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===st.bat));
+  document.querySelectorAll('#spd button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===st.speed));
+}
+function defaults(){Object.assign(st,{theta:PH[0],omega:0,power:false,bat:2,idir:1,bdir:1,paused:false,turn:0});}
+$('play').onclick=()=>{st.paused=!st.paused;syncUI();};
+$('power').onclick=()=>{st.power=!st.power;syncUI();};
+$('reset').onclick=()=>{defaults();syncUI();};
+$('flipI').onclick=()=>{st.idir*=-1;};
+$('flipB').onclick=()=>{st.bdir*=-1;};
+document.querySelectorAll('#bat button').forEach(b=>b.onclick=()=>{st.bat=+b.dataset.v;syncUI();});
+document.querySelectorAll('#spd button').forEach(b=>b.onclick=()=>{st.speed=+b.dataset.v;syncUI();});
+document.addEventListener('keydown',e=>{
+  if(e.code!=='Space'||e.repeat)return;
+  const t=e.target;if(t&&(t.tagName==='BUTTON'||t.tagName==='INPUT'))return;
+  e.preventDefault();st.idir*=-1;
+});
+
+function ptr(e){const r=mc.getBoundingClientRect();return [(e.clientX-r.left)/r.width*640,(e.clientY-r.top)/r.height*420];}
+let off=0;
+mc.addEventListener('pointerdown',e=>{const [px,py]=ptr(e);if(Math.hypot(px-CX,py-CY)>150)return;
+  st.drag=true;mc.classList.add('drag');mc.setPointerCapture(e.pointerId);off=st.theta-Math.atan2(-(py-CY),px-CX);st.omega=0;});
+mc.addEventListener('pointermove',e=>{if(!st.drag)return;const [px,py]=ptr(e);st.theta=norm(Math.atan2(-(py-CY),px-CX)+off);st.omega=0;});
+const up=()=>{st.drag=false;mc.classList.remove('drag');};
+mc.addEventListener('pointerup',up);mc.addEventListener('pointercancel',up);
+
+syncUI();
+})();
+</script>
+</body>
+</html>
